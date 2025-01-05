@@ -1,12 +1,11 @@
 import os
 import csv
 import requests
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
 
 OUTPUT_DIR = "output"
-PLUGIN_DOWNLOAD_DIR = "downloads/plugins"
-THEME_DOWNLOAD_DIR = "downloads/themes"
-API_URL = "https://api.wordpress.org/plugins/info/1.2/"
+DOWNLOAD_DIR = "downloads"
+API_URL = "https://api.wordpress.org/{}/info/1.2/"
 
 
 def download_from_website_csv(domain):
@@ -31,18 +30,14 @@ def download_from_website_csv(domain):
                 print(f"Skipping {slug}. Unable to determine version.")
                 continue
 
-            download_path = (
-                os.path.join(PLUGIN_DOWNLOAD_DIR, slug, version)
-                if content_type == 'plugin'
-                else os.path.join(THEME_DOWNLOAD_DIR, slug, version)
-            )
+            download_path = os.path.join(DOWNLOAD_DIR, content_type, slug, version)
 
             if os.path.exists(download_path):
                 print(f"{slug} (v{version}) already downloaded.")
                 continue
 
             print(f"Downloading {slug} (v{version})...")
-            download_plugin_or_theme(slug, version, content_type)
+            download_plugin_or_theme(slug, version, content_type, download_type)
 
 
 def get_latest_version(slug, content_type):
@@ -53,7 +48,7 @@ def get_latest_version(slug, content_type):
     }
 
     try:
-        response = requests.get(API_URL, params=params)
+        response = requests.get(API_URL.format(content_type), params=params)
         response.raise_for_status()
         data = response.json()
         return data.get('version')
@@ -62,38 +57,66 @@ def get_latest_version(slug, content_type):
         return None
 
 
-def download_plugins_or_themes(browse=None, tag=None, author=None):
-    params = {
-        'action': 'query_plugins',
-        'request[browse]': browse,
-        'request[tag]': tag,
-        'request[author]': author,
-        'request[per_page]': 10
-    }
+def download_plugins_or_themes(download_type, browse=None, tag=None, author=None):
+    # Prompt the user for the number of items to download
+    default_dl_size = 10
+    max_items = input(f"How many {download_type} would you like to download? (default {default_dl_size}): ").strip()
+    max_items = int(max_items) if max_items.isdigit() else default_dl_size
+
+    if download_type == "plugins":
+        params = {
+            'action': f'query_{download_type}',
+            'request[browse]': browse,
+            'request[tag]': tag,
+            'request[author]': author,
+            'request[per_page]': max_items,
+        }
+    else:
+        params = {
+            'action': f'query_{download_type}',
+            'per_page': max_items,
+            'fields': {
+                'downloadlink': True,
+            }
+        }
+        if browse:
+            params['browse'] = browse
+        if tag:
+            params['tag'] = tag
+        if author:
+            params['author'] = author
+        
 
     try:
-        response = requests.get(API_URL, params=params)
+        response = requests.get(API_URL.format(download_type), params=params)
         response.raise_for_status()
         data = response.json()
 
-        plugins = data.get('plugins', [])
-        for plugin in plugins:
-            slug = plugin['slug']
-            version = plugin['version']
-            download_link = plugin['download_link']
+        items = data.get(download_type, [])
+        for item in items:
+            slug = item['slug']
+            version = item['version']
+            download_link = item['download_link']
 
-            download_path = os.path.join(PLUGIN_DOWNLOAD_DIR, slug, version)
-            if os.path.exists(download_path):
+            download_path = os.path.join(DOWNLOAD_DIR, download_type, slug)
+            if os.path.exists(os.path.join(download_path, version)):
                 print(f"{slug} (v{version}) already downloaded.")
                 continue
 
             print(f"Downloading {slug} (v{version})...")
-            download_and_extract(download_link, download_path)
+            download_and_extract(download_link, download_path, slug, version)
+            
     except requests.RequestException as e:
-        print(f"Failed to fetch plugins: {e}")
+        print(f"Failed to fetch {download_type}: {e}")
+        query_string = urlencode(params, doseq=True)
+        print(f"{API_URL.format(download_type)}?{query_string}")
     except ValueError as e:
         print("Failed to parse response from API.")
         print(response.content)
+    except Exception as e:
+        query_string = urlencode(params, doseq=True)
+        print(f"{API_URL.format(download_type)}?{query_string}")
+        raise
 
 
 def download_plugin_or_theme(slug, version, content_type):
@@ -105,30 +128,23 @@ def download_plugin_or_theme(slug, version, content_type):
     }
 
     try:
-        response = requests.get(API_URL, params=params)
+        response = requests.get(API_URL.format(content_type), params=params)
         response.raise_for_status()
         data = response.json()
 
         if 'download_link' in data and (data['version'] == version or version == "latest"):
             download_link = data['download_link']
-            save_path = (
-                os.path.join(PLUGIN_DOWNLOAD_DIR, slug, version)
-                if content_type == 'plugin'
-                else os.path.join(THEME_DOWNLOAD_DIR, slug, version)
-            )
-
+            save_path = os.path.join(DOWNLOAD_DIR, content_type, slug)
             os.makedirs(save_path, exist_ok=True)
-            download_and_extract(download_link, save_path)
+            download_and_extract(download_link, save_path, slug, version)
         else:
             print(f"Version mismatch or download link not found for {slug}.")
-    except requests.RequestException as e:
-        print(f"Failed to fetch {slug}: {e}")
     except ValueError as e:
         print(f"Failed to parse API response for {slug}. Error: {e}")
         print(response.content)
 
 
-def download_and_extract(url, save_path):
+def download_and_extract(url, save_path, slug, version):
     zip_file = os.path.join(save_path, "download.zip")
 
     try:
@@ -143,8 +159,10 @@ def download_and_extract(url, save_path):
         import zipfile
         with zipfile.ZipFile(zip_file, 'r') as zip_ref:
             zip_ref.extractall(save_path)
-
         os.remove(zip_file)
+
+        # Move the extracted plugin to the version directory.
+        os.rename(os.path.join(save_path, slug), os.path.join(save_path, version))
         print("Extraction complete.")
     except Exception as e:
         print(f"Error during download or extraction: {e}")

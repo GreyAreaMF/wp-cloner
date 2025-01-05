@@ -4,7 +4,32 @@ from ..downloader import download_plugins_or_themes, download_from_website_csv
 
 OUTPUT_DIR = "output"
 
-def download_menu():
+
+def select_themes_or_plugins():
+    while True:
+        options = {
+            "1": "Plugins",
+            "2": "Themes",
+            "3": "Back to Main Menu",
+        }
+        
+        print("\nSelect Download Type:")
+        for key, value in options.items():
+            print(f"{key}. {value}")
+
+        choice = input("\nSelect and option: ")
+    
+        if choice == "1":
+            download_menu("plugins")
+        elif choice == "2":
+            download_menu("themes")
+        elif choice == "3":
+            break
+        else:
+            print("Invalid choice. Please try again.")
+            download_themes_or_plugins()
+
+def download_menu(download_type):
     while True:
         print("\nDownload Themes or Plugins")
         print("1. Active Installs")
@@ -13,26 +38,26 @@ def download_menu():
         print("4. Recently Updated")
         print("5. Tag")
         print("6. From Website CSV")
-        print("7. Back to Main Menu")
+        print("7. Back to Download Type Selection")
 
         choice = input("Select an option: ")
 
         if choice == '1':
-            download_plugins_or_themes(browse="popular")
+            download_plugins_or_themes(download_type, browse="popular")
         elif choice == '2':
-            download_plugins_or_themes(browse="new")
+            download_plugins_or_themes(download_type, browse="new")
         elif choice == '4':
-            download_plugins_or_themes(browse="updated")
+            download_plugins_or_themes(download_type, browse="updated")
         elif choice == '3':
             author = input("Enter the author name: ").strip()
             if author:
-                download_plugins_or_themes(author=author)
+                download_plugins_or_themes(download_type, author=author)
             else:
                 print("Author name cannot be empty.")
         elif choice == '5':
             tag = input("Enter the tag: ").strip()
             if tag:
-                download_plugins_or_themes(tag=tag)
+                download_plugins_or_themes(download_type, tag=tag)
             else:
                 print("Tag cannot be empty.")
         elif choice == '6':
@@ -41,7 +66,7 @@ def download_menu():
             break
         else:
             print("This option is not yet implemented.")
-
+    
 def list_and_download_from_csv():
     if not os.path.exists(OUTPUT_DIR):
         print("Output directory not found.")

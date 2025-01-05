@@ -6,6 +6,9 @@ MANIFEST_FILE = "downloads/manifest.json"
 PLUGIN_DIR = "downloads/plugins"
 THEME_DIR = "downloads/themes"
 
+# List of paths to ignore during manifest generations
+IGNORE_PATHS = ["vendor_prefixed", "vendor", "modules", "jetpack_vendor"]
+
 no_match_plugins = []
 
 
@@ -54,19 +57,12 @@ def generate_manifest(base_dir, content_type, manifest_data):
                 version_path = os.path.join(slug_path, version)
                 if os.path.isdir(version_path):
                     version_regex, version_file = detect_version(version_path)  # Refactored detect_version
+                    if not version_regex and not version_file:
+                        no_match_plugins.append({'slug': slug, 'version': version})
                     update_manifest(manifest_data, content_type, slug, version, slug_path, version_file, version_regex)
 
 
-def update_manifest(manifest_data, content_type, slug, version, slug_path, version_file, version_regex):
-    # Normalize file paths by stripping version numbers
-    def strip_version_from_path(file_path):
-        parts = file_path.split(os.sep)
-        return os.path.join(*parts[:3], *parts[4:])
-
-    # Strip version from version_file
-    if version_file:
-        version_file = strip_version_from_path(version_file)
-
+def update_manifest(manifest_data, content_type, slug, version, slug_path, version_file, version_regex):        
     manifest_entry = manifest_data.setdefault(content_type, {}).setdefault(slug, {}).setdefault(version, {
         'slug': slug,
         'version file': version_file,
@@ -76,10 +72,16 @@ def update_manifest(manifest_data, content_type, slug, version, slug_path, versi
 
     # Add files, removing the version number from paths
     for root, _, files in os.walk(slug_path):
+        if any(ignored in root.split(os.sep) for ignored in IGNORE_PATHS):
+            continue
         for file in files:
             if not file.endswith('.php'):
                 full_path = os.path.join(root, file)
-                normalized_path = strip_version_from_path(full_path)
+
+                # Remove the irrelevant part of the path
+                parts = full_path.split(os.sep)
+                normalized_path = os.path.join('wp_content', content_type, slug, *parts[4:])
+                
                 manifest_entry['files'].append(normalized_path)
 
 

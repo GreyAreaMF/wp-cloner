@@ -1,4 +1,4 @@
-from .download import download_menu
+from .download import select_themes_or_plugins
 from ..scan_website import scan_website
 from ..manifest_builder import build_manifests
 from ..cleanup import cleanup_downloads
@@ -17,7 +17,7 @@ def show():
         choice = input("Select an option: ")
 
         if choice == '1':
-            download_menu()
+            select_themes_or_plugins()
         elif choice == '2':
             scan_website()
         elif choice == '3':
@@ -29,3 +29,4 @@ def show():
             break
         else:
             print("Invalid selection. Please try again.")
+

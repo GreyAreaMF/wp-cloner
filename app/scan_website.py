@@ -6,9 +6,11 @@ from urllib.parse import urlparse
 import re
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
+from .detect_version import detect_version
+
 MANIFEST_FILE = "downloads/manifest.json"
 OUTPUT_DIR = "output"
-FILE_CHECK_LIMIT = 10  # Default limit for file checks per plugin/theme
+FILE_CHECK_LIMIT = 5  # Default limit for file checks per plugin/theme
 
 # Suppress SSL warnings
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
